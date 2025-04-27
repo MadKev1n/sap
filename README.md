@@ -38,8 +38,8 @@
         </li>
         <li><strong>Файлы:</strong>
             <ul>
-                <li><code>app_list.txt</code>: IP и список игр с портами.</li>
-                <li><code>default.txt</code>: Предустановленные игры и порты.</li>
+                <li><code>app_list.txt</code>: IP и список игр с портами (создаётся при первом запуске, если отсутствует).</li>
+                <li><code>default.txt</code>: Предустановленные игры и порты (опционально).</li>
                 <li><code>script_log.txt</code>: Лог действий.</li>
             </ul>
         </li>
@@ -112,32 +112,44 @@
 </div>
 <div class="section" id="installation">
     <h2>Установка</h2>
-    <p>Скрипты устанавливаются через клонирование репозитория GitHub с проверками и обработкой ошибок. Выполните:</p>
+    <p>Скрипты устанавливаются через клонирование репозитория GitHub с проверками и настройкой алиаса <code>sap</code>. Выполните:</p>
     <pre class="language-markup"><code>sudo bash -c 'set -e; \
 if ! ping -c 1 8.8.8.8 &>/dev/null; then echo "Ошибка: Нет интернета"; exit 1; fi; \
 if [ "$(id -u)" -ne 0 ]; then echo "Ошибка: Требуются права root"; exit 1; fi; \
 rm -rf /root/set-app-ports; \
 mkdir -p /root/set-app-ports && cd /root/set-app-ports; \
-apt update && apt install -y git; \
+apt update && apt install -y git dos2unix; \
 if ! command -v git &>/dev/null; then echo "Ошибка: Не удалось установить git"; exit 1; fi; \
+if ! command -v dos2unix &>/dev/null; then echo "Ошибка: Не удалось установить dos2unix"; exit 1; fi; \
 if [ ! -f ~/.ssh/id_ed25519 ]; then ssh-keygen -t ed25519 -C "sap-install" -f ~/.ssh/id_ed25519 -N ""; fi; \
 if ! ssh -T git@github.com &>/dev/null; then echo "Предупреждение: SSH-доступ не настроен, используем HTTPS"; git clone https://github.com/MadKev1n/sap.git . || { echo "Ошибка: Не удалось клонировать репозиторий"; exit 1; }; else git clone git@github.com:MadKev1n/sap.git . || { echo "Ошибка: Не удалось клонировать репозиторий"; exit 1; }; fi; \
+if [ ! -f common.sh ]; then echo "Ошибка: Файл common.sh отсутствует в репозитории"; exit 1; fi; \
+dos2unix *.sh; \
 chmod +x sap.sh pritunl.sh openvpn-client.sh common.sh; \
+touch app_list.txt default.txt; \
 chmod 644 app_list.txt default.txt; \
-bash sap.sh'</code></pre>
+bash sap.sh; \
+source ~/.bashrc; \
+echo "Установка завершена. Запустите панель командой: sap"'</code></pre>
     <h3>Что делает команда:</h3>
     <ol>
         <li>Проверяет наличие интернета (<code>ping 8.8.8.8</code>).</li>
         <li>Проверяет права root (<code>id -u</code>).</li>
         <li>Удаляет старую директорию <code>/root/set-app-ports</code>.</li>
         <li>Создаёт директорию <code>/root/set-app-ports</code>.</li>
-        <li>Устанавливает <code>git</code> через <code>apt</code>.</li>
-        <li>Проверяет наличие <code>git</code>.</li>
+        <li>Устанавливает <code>git</code> и <code>dos2unix</code> через <code>apt</code>.</li>
+        <li>Проверяет наличие <code>git</code> и <code>dos2unix</code>.</li>
         <li>Создаёт SSH-ключ, если он отсутствует.</li>
         <li>Проверяет SSH-доступ к GitHub; если не настроен, использует HTTPS.</li>
         <li>Клонирует репозиторий <code>git@github.com:MadKev1n/sap.git</code> или <code>https://github.com/MadKev1n/sap.git</code>.</li>
-        <li>Устанавливает права на файлы.</li>
-        <li>Запускает <code>sap.sh</code>.</li>
+        <li>Проверяет наличие <code>common.sh</code>.</li>
+        <li>Конвертирует все скрипты (<code>*.sh</code>) в формат LF с помощью <code>dos2unix</code>.</li>
+        <li>Устанавливает права на скрипты.</li>
+        <li>Создаёт пустые файлы <code>app_list.txt</code> и <code>default.txt</code>, если они отсутствуют.</li>
+        <li>Устанавливает права на <code>app_list.txt</code> и <code>default.txt</code>.</li>
+        <li>Запускает <code>sap.sh</code> для настройки алиаса <code>sap</code>.</li>
+        <li>Применяет <code>~/.bashrc</code> для активации алиаса.</li>
+        <li>Выводит сообщение о завершении и инструкцию запустить <code>sap</code>.</li>
     </ol>
     <p><strong>Настройка SSH-доступа (рекомендуется):</strong></p>
     <ul>
@@ -154,15 +166,18 @@ bash sap.sh'</code></pre>
     </ul>
     <p><strong>Примечания:</strong></p>
     <ul>
-        <li>Требуется интернет для клонирования и установки <code>git</code>.</li>
-        <li>Если SSH-доступ не настроен, команда автоматически использует HTTPS.</li>
-        <li>Проверьте наличие всех файлов после клонирования: <code>ls -l /root/set-app-ports</code>.</li>
+        <li>Требуется интернет для клонирования и установки пакетов.</li>
+        <li>Если SSH-доступ не настроен, команда использует HTTPS.</li>
+        <li>Файлы <code>app_list.txt</code> и <code>default.txt</code> создаются автоматически, если отсутствуют в репозитории.</li>
+        <li>Все скрипты конвертируются в формат LF для предотвращения ошибок.</li>
+        <li>После установки используйте <code>sap</code>. Если алиас не работает, выполните <code>source ~/.bashrc</code> или откройте новую сессию.</li>
+        <li>Проверьте наличие файлов: <code>ls -l /root/set-app-ports</code>.</li>
     </ul>
 </div>
 <div class="section" id="usage">
     <h2>Использование</h2>
     <h3 id="sap"><code>sap.sh</code></h3>
-    <p><strong>Запуск:</strong> После установки выполните <code>sudo bash /root/set-app-ports/sap.sh</code>. После первой установки используйте алиас <code>sap</code> (требуется <code>source ~/.bashrc</code>).</p>
+    <p><strong>Запуск:</strong> После установки используйте команду <code>sap</code>. Если алиас не работает, выполните <code>sudo bash /root/set-app-ports/sap.sh</code> или <code>source ~/.bashrc</code>.</p>
     <p><strong>Меню:</strong></p>
     <ol>
         <li><strong>Смена IP:</strong> Укажите IP для перенаправления (например, <code>192.168.1.100</code>).</li>
@@ -224,18 +239,31 @@ bash sap.sh'</code></pre>
                 <li>Используйте HTTPS: <code>git clone https://github.com/MadKev1n/sap.git</code>.</li>
             </ul>
         </li>
+        <li><strong>Ошибки из-за CRLF в скриптах:</strong>
+            <ul>
+                <li>Проверьте формат: <code>file sap.sh</code> (должно быть "ASCII text").</li>
+                <li>Конвертируйте в LF: <code>dos2unix sap.sh common.sh pritunl.sh openvpn-client.sh</code>.</li>
+            </ul>
+        </li>
     </ul>
     <h3><code>sap.sh</code></h3>
     <ul>
         <li><strong>Алиас <code>sap</code> не работает:</strong>
             <ul>
                 <li>Выполните: <code>source ~/.bashrc</code>.</li>
+                <li>Проверьте <code>~/.bashrc</code>: <code>grep "alias sap" ~/.bashrc</code>.</li>
             </ul>
         </li>
         <li><strong>Правила <code>iptables</code> не применяются:</strong>
             <ul>
                 <li>Проверьте формат <code>app_list.txt</code>: <code>cat app_list.txt</code>.</li>
                 <li>Убедитесь, что IP валиден: <code>grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' app_list.txt</code>.</li>
+            </ul>
+        </li>
+        <li><strong>Файл <code>common.sh</code> не найден:</strong>
+            <ul>
+                <li>Проверьте наличие: <code>ls /root/set-app-ports/common.sh</code>.</li>
+                <li>Убедитесь, что <code>common.sh</code> есть в репозитории: <code>git ls-files common.sh</code>.</li>
             </ul>
         </li>
     </ul>
@@ -269,20 +297,20 @@ bash sap.sh'</code></pre>
     <h3>Настройка Minecraft</h3>
     <ol>
         <li>Выполните установочную команду.</li>
-        <li>В меню выберите "1", введите <code>192.168.1.100</code>.</li>
+        <li>Запустите <code>sap</code>, выберите "1", введите <code>192.168.1.100</code>.</li>
         <li>Выберите "3", выберите Minecraft из <code>default.txt</code>.</li>
         <li>Выберите "8" для применения.</li>
         <li>Проверьте: <code>iptables -t nat -L PREROUTING</code>.</li>
     </ol>
     <h3>Установка Pritunl</h3>
     <ol>
-        <li>В меню <code>sap.sh</code> выберите "11".</li>
+        <li>Запустите <code>sap</code>, выберите "11".</li>
         <li>Скопируйте ключ и пароль.</li>
         <li>В браузере: <code>https://<ваш-IP>:9700</code>.</li>
     </ol>
     <h3>Подключение VPN</h3>
     <ol>
-        <li>В меню <code>sap.sh</code> выберите "12".</li>
+        <li>Запустите <code>sap</code>, выберите "12".</li>
         <li>Введите URL: <code>https://example.com/vpn-profile.zip</code>.</li>
         <li>Проверьте IP в выводе.</li>
     </ol>
@@ -290,7 +318,7 @@ bash sap.sh'</code></pre>
 <div class="section" id="updating">
     <h2>Обновление</h2>
     <ul>
-        <li>Используйте пункт 10 в <code>sap.sh</code> для загрузки новых версий из GitHub.</li>
+        <li>Запустите <code>sap</code> и выберите пункт 10 для загрузки новых версий из GitHub.</li>
         <li>Или повторите установочную команду.</li>
     </ul>
 </div>
