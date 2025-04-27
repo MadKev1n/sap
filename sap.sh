@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Подключение общих функций
-source "$(dirname "$(realpath "$0")")/common.sh"
+# Определяем директорию скрипта (работает с symlinks и при sourced вызове)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Конфигурация
 readonly SCRIPT_DIR="$(dirname "$(realpath "$0")")"
