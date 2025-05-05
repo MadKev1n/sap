@@ -35,7 +35,7 @@ log_action() {
     }
 
     # Проверка прав на запись
-    if [ ! -w "$log_file" ]; then
+    if [ ! -w "$log_file" ]; then {
         echo -e "${RED}Нет прав на запись в $log_file${NC}" >&2
         return 1
     }
