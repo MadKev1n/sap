@@ -35,18 +35,18 @@ log_action() {
     }
 
     # Проверка прав на запись
-    if [ ! -w "$log_file" ]; then {
+    if [ ! -w "$log_file" ]; then
         echo -e "${RED}Нет прав на запись в $log_file${NC}" >&2
         return 1
-    }
+    fi
 
     # Ротация логов при превышении размера
-    if [ -f "$log_file" ] && [ "$(stat -c %s "$log_file")" -gt "$max_size" ]; then {
+    if [ -f "$log_file" ] && [ "$(stat -c %s "$log_file")" -gt "$max_size" ]; then
         mv "$log_file" "$log_file.old" 2>/dev/null || {
             echo -e "${RED}Ошибка ротации логов $log_file${NC}" >&2
             return 1
         }
-    }
+    fi
 
     # Запись в лог
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $(whoami) - [$level] $message" >> "$log_file" 2>/dev/null || {
@@ -61,7 +61,7 @@ check_root() {
         echo -e "${RED}Требуются права root!${NC}" >&2
         log_action "ERROR" "Запуск без прав root" "$LOG_FILE"
         exit 1
-    }
+    fi
 }
 
 # Проверка и установка зависимостей
