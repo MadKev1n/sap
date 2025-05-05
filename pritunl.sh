@@ -8,6 +8,8 @@ readonly RETRY_DELAY=5
 readonly SERVICE_TIMEOUT=30
 readonly MONGODB_PORT=27017
 readonly PRITUNL_CONF="/etc/pritunl.conf"
+readonly PRITUNL_DATA_DIR="/var/lib/pritunl"
+readonly PRITUNL_JSON="$PRITUNL_DATA_DIR/pritunl.json"
 
 # Проверка сетевой доступности
 check_network() {
@@ -166,6 +168,34 @@ fix_pritunl_conf() {
     fi
 }
 
+# Проверка и очистка конфигурационных файлов Pritunl
+clean_pritunl_config() {
+    echo -e "${YELLOW}Проверка и очистка конфигурационных файлов Pritunl...${NC}"
+    if [ -d "$PRITUNL_DATA_DIR" ]; then
+        # Создаём резервную копию
+        local backup_dir="$PRITUNL_DATA_DIR/backup_$(date +%F_%H-%M-%S)"
+        echo -e "${YELLOW}Создание резервной копии конфигурации в $backup_dir...${NC}"
+        mkdir -p "$backup_dir"
+        cp -r "$PRITUNL_DATA_DIR"/*.json "$backup_dir" 2>/dev/null || true
+        log_action "INFO" "Создана резервная копия конфигурации в $backup_dir" "$LOG_FILE"
+
+        # Проверяем JSON-файл
+        if [ -f "$PRITUNL_JSON" ]; then
+            if ! python3 -m json.tool "$PRITUNL_JSON" >/dev/null 2>&1; then
+                echo -e "${RED}Обнаружен некорректный JSON в $PRITUNL_JSON, удаление...${NC}"
+                log_action "WARNING" "Некорректный JSON в $PRITUNL_JSON, файл удалён" "$LOG_FILE"
+                rm -f "$PRITUNL_JSON"
+            else
+                echo -e "${GREEN}JSON в $PRITUNL_JSON корректен${NC}"
+                log_action "INFO" "JSON в $PRITUNL_JSON корректен" "$LOG_FILE"
+            fi
+        fi
+    else
+        echo -e "${YELLOW}Директория $PRITUNL_DATA_DIR не существует, пропускаем...${NC}"
+        log_action "INFO" "Директория $PRITUNL_DATA_DIR не существует" "$LOG_FILE"
+    fi
+}
+
 # Настройка сервисов
 setup_services() {
     echo -e "${YELLOW}Настройка сервисов...${NC}"
@@ -209,7 +239,7 @@ main() {
     clear
     echo -e "${GREEN}=== Установка Pritunl VPN ===${NC}"
     check_root
-    install_dependencies "lsb-release gpg curl apt systemctl netcat-traditional"
+    install_dependencies "lsb-release gpg curl apt systemctl netcat-traditional python3"
     check_network
     check_ubuntu_version
     add_repositories
@@ -218,10 +248,15 @@ main() {
     setup_services
     fix_pritunl_conf
     check_mongodb
+    clean_pritunl_config
     echo -e "${YELLOW}Ожидание полной инициализации сервисов...${NC}"
     sleep 5  # Дополнительная задержка для стабилизации
     echo -e "${RED}Ключ для активации Pritunl:${NC}"
     run_with_retry "pritunl setup-key" "Получение ключа Pritunl"
+    # Перезапуск Pritunl для применения изменений
+    echo -e "${YELLOW}Перезапуск сервиса Pritunl...${NC}"
+    systemctl restart pritunl
+    wait_for_service "pritunl" $SERVICE_TIMEOUT
     echo -e "${GREEN}Установка завершена${NC}"
     log_action "INFO" "Установка Pritunl завершена" "$LOG_FILE"
 }
