@@ -5,6 +5,7 @@ source "$(dirname "$(realpath "$0")")/common.sh"
 readonly LOG_FILE="/var/log/pritunl_setup.log"
 readonly MAX_RETRIES=3
 readonly RETRY_DELAY=5
+readonly SERVICE_WAIT_TIMEOUT=30  # Максимальное время ожидания инициализации сервисов (секунды)
 
 # Проверка сетевой доступности
 check_network() {
@@ -99,25 +100,106 @@ install_packages() {
     log_action "INFO" "Пакеты установлены" "$LOG_FILE"
 }
 
+# Ожидание инициализации сервиса
+wait_for_service() {
+    local service_name="$1"
+    local timeout="$SERVICE_WAIT_TIMEOUT"
+    local elapsed=0
+    
+    echo -e "${YELLOW}Ожидание инициализации $service_name...${NC}"
+    
+    while [ $elapsed -lt $timeout ]; do
+        if systemctl is-active --quiet "$service_name"; then
+            # Дополнительная проверка для MongoDB
+            if [ "$service_name" == "mongod" ]; then
+                if mongo --eval "db.runCommand({ping:1})" >/dev/null 2>&1; then
+                    echo -e "${GREEN}$service_name готов к работе${NC}"
+                    log_action "INFO" "$service_name успешно инициализирован" "$LOG_FILE"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}$service_name готов к работе${NC}"
+                log_action "INFO" "$service_name успешно инициализирован" "$LOG_FILE"
+                return 0
+            fi
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+        echo -e "${YELLOW}Прошло $elapsed секунд...${NC}"
+    done
+    
+    echo -e "${RED}Таймаут ожидания $service_name${NC}" >&2
+    log_action "ERROR" "Таймаут ожидания $service_name" "$LOG_FILE"
+    return 1
+}
+
 # Настройка сервисов
 setup_services() {
     echo -e "${YELLOW}Настройка сервисов...${NC}"
     systemctl disable ufw >/dev/null 2>&1 || true
+    
     for service in mongod pritunl; do
-        if ! systemctl enable "$service" || ! systemctl start "$service"; then
-            echo -e "${RED}Ошибка запуска $service${NC}" >&2
-            log_action "ERROR" "Ошибка запуска $service" "$LOG_FILE"
+        if ! systemctl enable "$service"; then
+            echo -e "${RED}Ошибка включения $service${NC}" >&2
+            log_action "ERROR" "Ошибка включения $service" "$LOG_FILE"
             exit 1
         fi
-        if systemctl is-active --quiet "$service"; then
-            echo -e "${GREEN}$service запущен${NC}"
-        else
-            echo -e "${RED}$service не работает. Проверьте логи: journalctl -u $service${NC}" >&2
-            log_action "ERROR" "$service не работает" "$LOG_FILE"
+        
+        if ! systemctl restart "$service"; then
+            echo -e "${RED}Ошибка перезапуска $service${NC}" >&2
+            log_action "ERROR" "Ошибка перезапуска $service" "$LOG_FILE"
+            exit 1
+        fi
+        
+        if ! wait_for_service "$service"; then
+            echo -e "${RED}$service не инициализировался за отведенное время${NC}" >&2
+            log_action "ERROR" "$service не инициализировался" "$LOG_FILE"
             exit 1
         fi
     done
+    
     log_action "INFO" "Сервисы настроены" "$LOG_FILE"
+}
+
+# Получение данных Pritunl
+get_pritunl_data() {
+    echo -e "${YELLOW}Получение данных Pritunl...${NC}"
+    
+    # Добавляем небольшую задержку перед получением данных
+    sleep 5
+    
+    local attempt=1
+    local setup_key=""
+    local default_password=""
+    
+    while [ $attempt -le $MAX_RETRIES ]; do
+        echo -e "${YELLOW}Попытка $attempt получить данные...${NC}"
+        
+        # Получаем ключ установки
+        if setup_key=$(pritunl setup-key 2>/dev/null); then
+            # Получаем пароль по умолчанию
+            if default_password=$(pritunl default-password 2>/dev/null); then
+                echo -e "${GREEN}Данные успешно получены${NC}"
+                echo -e "${RED}Ключ для активации Pritunl:${NC}"
+                echo "$setup_key"
+                echo -e "${RED}Временные данные для входа:${NC}"
+                echo "$default_password"
+                log_action "INFO" "Данные Pritunl успешно получены" "$LOG_FILE"
+                return 0
+            fi
+        fi
+        
+        echo -e "${YELLOW}Ошибка получения данных (попытка $attempt/${MAX_RETRIES})${NC}"
+        sleep $RETRY_DELAY
+        attempt=$((attempt + 1))
+    done
+    
+    echo -e "${RED}Не удалось получить данные Pritunl после $MAX_RETRIES попыток${NC}" >&2
+    echo -e "${YELLOW}Вы можете попробовать получить данные вручную после перезагрузки:${NC}"
+    echo -e "1. Ключ установки: ${GREEN}pritunl setup-key${NC}"
+    echo -e "2. Пароль по умолчанию: ${GREEN}pritunl default-password${NC}"
+    log_action "ERROR" "Не удалось получить данные Pritunl" "$LOG_FILE"
+    return 1
 }
 
 # Основной процесс
@@ -132,19 +214,9 @@ main() {
     add_keys
     install_packages
     setup_services
-    echo -e "${RED}Ключ для активации Pritunl:${NC}"
-    if ! pritunl setup-key; then
-        echo -e "${RED}Ошибка получения ключа${NC}" >&2
-        log_action "ERROR" "Ошибка получения ключа Pritunl" "$LOG_FILE"
-        exit 1
-    fi
-    echo -e "${RED}Временные данные для входа:${NC}"
-    if ! pritunl default-password; then
-        echo -e "${RED}Ошибка получения пароля${NC}" >&2
-        log_action "ERROR" "Ошибка получения пароля Pritunl" "$LOG_FILE"
-        exit 1
-    fi
+    get_pritunl_data
     echo -e "${GREEN}Установка завершена${NC}"
+    echo -e "${YELLOW}Доступ к веб-интерфейсу: https://<ваш_IP>${NC}"
     log_action "INFO" "Установка Pritunl завершена" "$LOG_FILE"
 }
 
