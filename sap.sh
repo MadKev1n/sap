@@ -14,6 +14,45 @@ readonly LOG_FILE="$SCRIPT_DIR/script_log.txt"
 readonly REPO_URL="git@github.com:MadKev1n/sap.git" # SSH-URL для безопасности
 readonly REPO_BRANCH="main"
 
+# Функция для обновления из Git
+update_from_git() {
+    local repo_url="$1"
+    local branch="$2"
+    local target_dir="$3"
+    local log_file="$4"
+    
+    echo -e "${YELLOW}Обновление скриптов через Git...${NC}"
+    log_action "INFO" "Попытка обновления из Git" "$log_file"
+    
+    # Добавляем GitHub в известные хосты
+    mkdir -p ~/.ssh
+    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+    
+    if [ -d "$target_dir/.git" ]; then
+        # Если это git-репозиторий, делаем pull
+        (cd "$target_dir" && git pull origin "$branch") && {
+            echo -e "${GREEN}Обновление успешно завершено${NC}"
+            log_action "INFO" "Git pull успешен" "$log_file"
+            return 0
+        } || {
+            echo -e "${RED}Ошибка при обновлении (git pull)${NC}" >&2
+            log_action "ERROR" "Ошибка git pull" "$log_file"
+            return 1
+        }
+    else
+        # Иначе делаем clone
+        git clone -b "$branch" "$repo_url" "$target_dir" && {
+            echo -e "${GREEN}Клонирование успешно завершено${NC}"
+            log_action "INFO" "Git clone успешен" "$log_file"
+            return 0
+        } || {
+            echo -e "${RED}Ошибка клонирования репозитория${NC}" >&2
+            log_action "ERROR" "Ошибка git clone" "$log_file"
+            return 1
+        }
+    fi
+}
+
 # Проверка прав и зависимостей
 check_root
 install_dependencies "iptables wget dos2unix awk ip git"
