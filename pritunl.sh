@@ -6,6 +6,8 @@ readonly LOG_FILE="/var/log/pritunl_setup.log"
 readonly MAX_RETRIES=3
 readonly RETRY_DELAY=5
 readonly SERVICE_TIMEOUT=30
+readonly MONGODB_PORT=27017
+readonly PRITUNL_CONF="/etc/pritunl.conf"
 
 # Проверка сетевой доступности
 check_network() {
@@ -21,8 +23,10 @@ check_network() {
 # Проверка версии Ubuntu
 check_ubuntu_version() {
     local version=$(lsb_release -rs)
-    if [[ "$version" != "22.04" ]]; then
-        echo -e "${RED}Скрипт оптимизирован для Ubuntu 22.04, текущая версия: $version${NC}" >&2
+    echo -e "${YELLOW}Обнаружена версия ОС: Ubuntu $version${NC}"
+    log_action "INFO" "Обнаружена версия ОС: Ubuntu $version" "$LOG_FILE"
+    if [[ "$version" != "22.04" && "$version" != "24.04" ]]; then
+        echo -e "${RED}Скрипт поддерживает только Ubuntu 22.04 и 24.04, текущая версия: $version${NC}" >&2
         log_action "ERROR" "Неподдерживаемая версия Ubuntu: $version" "$LOG_FILE"
         exit 1
     fi
@@ -121,6 +125,47 @@ wait_for_service() {
     exit 1
 }
 
+# Проверка доступности MongoDB
+check_mongodb() {
+    echo -e "${YELLOW}Проверка доступности MongoDB...${NC}"
+    local timeout=30
+    local elapsed=0
+    local interval=2
+
+    while [ $elapsed -lt "$timeout" ]; do
+        if nc -z localhost $MONGODB_PORT >/dev/null 2>&1; then
+            echo -e "${GREEN}MongoDB доступен на порту $MONGODB_PORT${NC}"
+            log_action "INFO" "MongoDB доступен на порту $MONGODB_PORT" "$LOG_FILE"
+            return 0
+        fi
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+    echo -e "${RED}MongoDB недоступен на порту $MONGODB_PORT после $timeout секунд${NC}" >&2
+    log_action "ERROR" "MongoDB недоступен на порту $MONGODB_PORT" "$LOG_FILE"
+    exit 1
+}
+
+# Исправление конфигурации Pritunl
+fix_pritunl_conf() {
+    echo -e "${YELLOW}Проверка и исправление конфигурации Pritunl...${NC}"
+    if [ -f "$PRITUNL_CONF" ]; then
+        if grep -q '^mongodb_uri = ""' "$PRITUNL_CONF" || ! grep -q '^mongodb_uri' "$PRITUNL_CONF"; then
+            echo -e "${YELLOW}Установка mongodb_uri в $PRITUNL_CONF...${NC}"
+            sed -i '/^mongodb_uri/d' "$PRITUNL_CONF"  # Удаляем старую строку, если есть
+            echo 'mongodb_uri = "mongodb://localhost:27017/pritunl"' >> "$PRITUNL_CONF"
+            log_action "INFO" "Добавлен mongodb_uri в $PRITUNL_CONF" "$LOG_FILE"
+        else
+            echo -e "${GREEN}mongodb_uri уже настроен${NC}"
+            log_action "INFO" "mongodb_uri уже настроен в $PRITUNL_CONF" "$LOG_FILE"
+        fi
+    else
+        echo -e "${RED}Файл конфигурации $PRITUNL_CONF не найден${NC}" >&2
+        log_action "ERROR" "Файл конфигурации $PRITUNL_CONF не найден" "$LOG_FILE"
+        exit 1
+    fi
+}
+
 # Настройка сервисов
 setup_services() {
     echo -e "${YELLOW}Настройка сервисов...${NC}"
@@ -164,19 +209,19 @@ main() {
     clear
     echo -e "${GREEN}=== Установка Pritunl VPN ===${NC}"
     check_root
-    install_dependencies "lsb-release gpg curl apt systemctl"
+    install_dependencies "lsb-release gpg curl apt systemctl netcat-traditional"
     check_network
     check_ubuntu_version
     add_repositories
     add_keys
     install_packages
     setup_services
+    fix_pritunl_conf
+    check_mongodb
     echo -e "${YELLOW}Ожидание полной инициализации сервисов...${NC}"
     sleep 5  # Дополнительная задержка для стабилизации
     echo -e "${RED}Ключ для активации Pritunl:${NC}"
     run_with_retry "pritunl setup-key" "Получение ключа Pritunl"
-    echo -e "${RED}Временные данные для входа:${NC}"
-    run_with_retry "pritunl default-password" "Получение пароля Pritunl"
     echo -e "${GREEN}Установка завершена${NC}"
     log_action "INFO" "Установка Pritunl завершена" "$LOG_FILE"
 }
