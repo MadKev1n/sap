@@ -41,7 +41,7 @@ log_action() {
     }
 
     # Ротация логов при превышении размера
-    if [ -f "$log_file" ] && [ "$(stat -c %s "$log_file")" -gt "$max_size" ]; then
+    if [ -f "$log_file" ] && [ "$(stat -c %s "$log_file")" -gt "$max_size" ]; then {
         mv "$log_file" "$log_file.old" 2>/dev/null || {
             echo -e "${RED}Ошибка ротации логов $log_file${NC}" >&2
             return 1
