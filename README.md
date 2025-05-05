@@ -26,14 +26,14 @@
     <ul>
         <li><strong>Функции:</strong>
             <ul>
-                <li>Установка алиаса <code>sap</code> в <code>~/.bashrc</code>.</li>
+                <li> алиаса <code>sap</code> в <code>~/.bashrc</code>.</li>
                 <li>Изменение IP-адреса для перенаправления портов.</li>
                 <li>Включение/выключение IP-маскарада.</li>
                 <li>Добавление игр и портов из <code>default.txt</code> или вручную.</li>
                 <li>Удаление портов.</li>
                 <li>Применение правил <code>iptables</code>.</li>
                 <li>Обновление скриптов через Git.</li>
-                <li>Установка Pritunl и OpenVPN-клиента.</li>
+                <li> Pritunl и OpenVPN-клиента.</li>
             </ul>
         </li>
         <li><strong>Файлы:</strong>
@@ -51,7 +51,7 @@
             <ul>
                 <li>Логирование действий с ротацией логов.</li>
                 <li>Проверка прав root.</li>
-                <li>Установка зависимостей.</li>
+                <li> зависимостей.</li>
                 <li>Проверка соединения с интернетом.</li>
                 <li>Обновление файлов через Git.</li>
             </ul>
@@ -62,9 +62,9 @@
     <ul>
         <li><strong>Функции:</strong>
             <ul>
-                <li>Установка зависимостей (<code>lsb-release</code>, <code>gnupg</code>).</li>
+                <li> зависимостей (<code>lsb-release</code>, <code>gnupg</code>).</li>
                 <li>Добавление репозиториев MongoDB, OpenVPN и Pritunl.</li>
-                <li>Установка пакетов (<code>pritunl</code>, <code>mongodb-org</code>, <code>openvpn</code>, <code>wireguard</code>).</li>
+                <li> пакетов (<code>pritunl</code>, <code>mongodb-org</code>, <code>openvpn</code>, <code>wireguard</code>).</li>
                 <li>Запуск сервисов <code>mongod</code> и <code>pritunl</code>.</li>
                 <li>Вывод ключа и пароля.</li>
             </ul>
@@ -80,7 +80,7 @@
     <ul>
         <li><strong>Функции:</strong>
             <ul>
-                <li>Установка зависимостей (<code>openvpn</code>, <code>curl</code>, <code>wget</code>, <code>unzip</code>).</li>
+                <li> зависимостей (<code>openvpn</code>, <code>curl</code>, <code>wget</code>, <code>unzip</code>).</li>
                 <li>Загрузка <code>.ovpn</code> профиля из ZIP по URL.</li>
                 <li>Очистка старых настроек.</li>
                 <li>Запуск VPN.</li>
@@ -113,24 +113,7 @@
 <div class="section" id="installation">
     <h2>Установка</h2>
     <p>Скрипты устанавливаются через клонирование репозитория GitHub с проверками и настройкой алиаса <code>sap</code>. Выполните:</p>
-    <pre class="language-markup"><code>sudo bash -c 'set -e; \
-if ! ping -c 1 8.8.8.8 &>/dev/null; then echo "Ошибка: Нет интернета"; exit 1; fi; \
-if [ "$(id -u)" -ne 0 ]; then echo "Ошибка: Требуются права root"; exit 1; fi; \
-rm -rf /root/set-app-ports; \
-mkdir -p /root/set-app-ports && cd /root/set-app-ports; \
-apt update && apt install -y git dos2unix; \
-if ! command -v git &>/dev/null; then echo "Ошибка: Не удалось установить git"; exit 1; fi; \
-if ! command -v dos2unix &>/dev/null; then echo "Ошибка: Не удалось установить dos2unix"; exit 1; fi; \
-if [ ! -f ~/.ssh/id_ed25519 ]; then ssh-keygen -t ed25519 -C "sap-install" -f ~/.ssh/id_ed25519 -N ""; fi; \
-if ! ssh -T git@github.com &>/dev/null; then echo "Предупреждение: SSH-доступ не настроен, используем HTTPS"; git clone https://github.com/MadKev1n/sap.git . || { echo "Ошибка: Не удалось клонировать репозиторий"; exit 1; }; else git clone git@github.com:MadKev1n/sap.git . || { echo "Ошибка: Не удалось клонировать репозиторий"; exit 1; }; fi; \
-if [ ! -f common.sh ]; then echo "Ошибка: Файл common.sh отсутствует в репозитории"; exit 1; fi; \
-dos2unix *.sh; \
-chmod +x sap.sh pritunl.sh openvpn-client.sh common.sh; \
-touch app_list.txt default.txt; \
-chmod 644 app_list.txt default.txt; \
-bash sap.sh; \
-source ~/.bashrc; \
-echo "Установка завершена. Запустите панель командой: sap"'</code></pre>
+    <pre class="language-markup"><code>sudo bash -c 'REPO_URL="https://github.com/MadKev1n/sap.git"; INSTALL_DIR="/root/set-app-ports"; error() { echo -e "\033[0;31mОшибка: $1\033[0m" >&2; exit 1; }; ping -c 1 8.8.8.8 &>/dev/null || error "Нет интернета"; [ "$(id -u)" -eq 0 ] || error "Требуются права root"; apt update && apt install -y git dos2unix || error "Не удалось установить зависимости"; rm -rf "$INSTALL_DIR" && mkdir -p "$INSTALL_DIR" && cd "$INSTALL_DIR" || error "Не удалось создать директорию"; git clone "$REPO_URL" . || error "Не удалось клонировать репозиторий"; [ -f common.sh ] || error "Файл common.sh отсутствует"; dos2unix *.sh; chmod +x sap.sh pritunl.sh openvpn-client.sh common.sh; touch app_list.txt default.txt; chmod 644 app_list.txt default.txt; bash sap.sh || error "Не удалось запустить sap.sh"; echo -e "\033[0;32mУстановка завершена\033[0m"; exec bash'</code></pre>
     <h3>Что делает команда:</h3>
     <ol>
         <li>Проверяет наличие интернета (<code>ping 8.8.8.8</code>).</li>
